@@ -1,0 +1,68 @@
+{
+  "template_id": "minimal",
+  "name": "极简透明",
+  "resolution": {"width": 1920, "height": 350},
+  "background": {
+    "color": "#000000",
+    "gradient": false,
+    "opacity": 0,
+    "image": ""
+  },
+  "global_style": {
+    "font_family": "Microsoft YaHei"
+  },
+  "elements": {
+    "team_a_name": {
+      "type": "label",
+      "geometry": {"x": 0.02, "y": 0.02, "w": 0.18, "h": 0.22},
+      "font_size": 30,
+      "color": "#ffffff",
+      "alignment": "center"
+    },
+    "team_a_score": {
+      "type": "digits",
+      "geometry": {"x": 0.02, "y": 0.22, "w": 0.20, "h": 0.74},
+      "font_size": 200,
+      "color": "#00e676",
+      "alignment": "center",
+      "min_digits": 2
+    },
+    "timer": {
+      "type": "timer",
+      "geometry": {"x": 0.36, "y": 0.06, "w": 0.28, "h": 0.62},
+      "font_size": 220,
+      "color": "#ffffff",
+      "alignment": "center",
+      "format": "mm:ss"
+    },
+    "period": {
+      "type": "label",
+      "geometry": {"x": 0.36, "y": 0.64, "w": 0.28, "h": 0.22},
+      "font_size": 36,
+      "color": "#888888",
+      "alignment": "center"
+    },
+    "team_b_score": {
+      "type": "digits",
+      "geometry": {"x": 0.78, "y": 0.22, "w": 0.20, "h": 0.74},
+      "font_size": 200,
+      "color": "#ff5252",
+      "alignment": "center",
+      "min_digits": 2
+    },
+    "team_b_name": {
+      "type": "label",
+      "geometry": {"x": 0.80, "y": 0.02, "w": 0.18, "h": 0.22},
+      "font_size": 30,
+      "color": "#ffffff",
+      "alignment": "center"
+    },
+    "overtime": {
+      "type": "label",
+      "geometry": {"x": 0.36, "y": 0.85, "w": 0.28, "h": 0.14},
+      "font_size": 28,
+      "color": "#ff6d00",
+      "alignment": "center"
+    }
+  }
+}

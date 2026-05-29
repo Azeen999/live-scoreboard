@@ -1,0 +1,402 @@
+from PySide6.QtWidgets import (QMainWindow, QWidget, QLabel,
+                               QVBoxLayout)
+from PySide6.QtCore import Qt, QTimer, QFileSystemWatcher, Signal
+import os
+from PySide6.QtGui import (QPainter, QLinearGradient, QColor, QFont, QPixmap,
+                           QMouseEvent)
+
+from src.models.game_state import GameState
+from src.templates.template_config import TemplateConfig, load_template, ElementConfig
+from PySide6.QtWidgets import QMenu
+
+
+class ScoreboardCanvas(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._template_config: TemplateConfig | None = None
+        self._cached_pixmap: QPixmap | None = None
+        self._cached_image_path: str = ""
+        self._scale_factor: float = 1.0
+        self._widgets: dict[str, QWidget] = {}
+        self.setAutoFillBackground(False)
+
+    def set_config(self, config: TemplateConfig | None):
+        self._template_config = config
+        self._load_image()
+        self._rebuild_elements()
+        self.update()
+
+    def _load_image(self):
+        self._cached_pixmap = None
+        self._cached_image_path = ""
+        if not self._template_config:
+            return
+        bg = self._template_config.background
+        if bg.image:
+            img_path = os.path.join(self._template_config.template_dir, bg.image)
+            if os.path.isfile(img_path):
+                self._cached_pixmap = QPixmap(img_path)
+                self._cached_image_path = img_path
+
+    def _rebuild_elements(self):
+        for w in self._widgets.values():
+            w.setParent(None)
+            w.deleteLater()
+        self._widgets.clear()
+        if not self._template_config:
+            return
+        for elem_id, elem in self._template_config.elements.items():
+            w = self._create_element(elem_id, elem)
+            self._widgets[elem_id] = w
+        self._reposition_overlays()
+
+    def _create_element(self, elem_id: str, elem: ElementConfig) -> QWidget:
+        label = QLabel(self)
+        label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        is_digits = elem.type in ("digits", "timer")
+        font_family = elem.font_family or self._template_config.font_family
+        if is_digits:
+            font_family = "Consolas"
+        font = QFont(font_family)
+        font.setBold(True)
+        font.setPixelSize(max(10, int(elem.font_size * self._scale_factor)))
+        label.setFont(font)
+        align_map = {
+            "left": Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            "right": Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            "center": Qt.AlignmentFlag.AlignCenter,
+        }
+        label.setAlignment(align_map.get(elem.alignment, Qt.AlignmentFlag.AlignCenter))
+        ss = f"color: {elem.color}; background: transparent; padding: 0px; margin: 0px;"
+        if is_digits:
+            ss += " letter-spacing: 2px;"
+        label.setStyleSheet(ss)
+        if elem.type == "digits":
+            label.setText("0" * elem.min_digits)
+        elif elem.type == "timer":
+            label.setText("00:00")
+        elif elem_id == "vs_divider":
+            label.setText("VS")
+        label.show()
+        return label
+
+    def get_widget(self, elem_id: str) -> QWidget | None:
+        return self._widgets.get(elem_id)
+
+    def reposition(self):
+        self._reposition_overlays()
+
+    def _reposition_overlays(self):
+        if not self._template_config:
+            return
+        w = self.width()
+        h = self.height()
+        if w <= 0 or h <= 0:
+            return
+        sf = self._scale_factor
+        for elem_id, elem in self._template_config.elements.items():
+            widget = self._widgets.get(elem_id)
+            if not widget:
+                continue
+            geo = elem.geometry
+            x = int(geo["x"] * w)
+            y = int(geo["y"] * h)
+            ew = int(geo["w"] * w)
+            eh = int(geo["h"] * h)
+            widget.setGeometry(x, y, ew, eh)
+            if isinstance(widget, QLabel):
+                desired_px = max(10, int(elem.font_size * sf))
+                max_px = min(desired_px, int(eh * 0.9))
+                font = widget.font()
+                font.setPixelSize(max(8, max_px))
+                widget.setFont(font)
+
+    def set_scale_factor(self, sf: float):
+        self._scale_factor = sf
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        if self._template_config:
+            bg = self._template_config.background
+            if self._cached_pixmap and not self._cached_pixmap.isNull():
+                painter.setOpacity(bg.opacity)
+                scaled = self._cached_pixmap.scaled(
+                    self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                x = (self.width() - scaled.width()) // 2
+                y = (self.height() - scaled.height()) // 2
+                painter.drawPixmap(x, y, scaled)
+                painter.setOpacity(1.0)
+            elif bg.gradient:
+                c1, c2 = QColor(bg.gradient_from), QColor(bg.gradient_to)
+                c1.setAlphaF(bg.opacity)
+                c2.setAlphaF(bg.opacity)
+                gradient = QLinearGradient(0, 0, 0, self.height())
+                gradient.setColorAt(0.0, c1)
+                gradient.setColorAt(1.0, c2)
+                painter.fillRect(self.rect(), gradient)
+            else:
+                c = QColor(bg.color)
+                c.setAlphaF(bg.opacity)
+                painter.fillRect(self.rect(), c)
+        else:
+            painter.fillRect(self.rect(), QColor("#0a0a1a"))
+        painter.end()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reposition_overlays()
+
+
+class ScoreboardWindow(QMainWindow):
+    visibility_changed = Signal(bool)
+
+    def __init__(self, game_state: GameState):
+        super().__init__()
+        self._gs = game_state
+        self._template_config: TemplateConfig | None = None
+        self._scale_factor: float = 1.0
+        self._blink_timer = QTimer(self)
+        self._blink_timer.timeout.connect(self._toggle_blink)
+        self._blinking = False
+        self._blink_visible = True
+        self._blink_label = None
+        self._drag_pos = None
+        self._stay_on_top = False
+        self._original_opacity: float = 1.0
+
+        self._template_dir = ""
+        self._file_watcher = QFileSystemWatcher(self)
+        self._file_watcher.fileChanged.connect(self._on_template_file_changed)
+        self._reload_debounce = QTimer(self)
+        self._reload_debounce.setSingleShot(True)
+        self._reload_debounce.timeout.connect(self._do_reload_template)
+
+        self.setWindowTitle("粗趣计分 - 记分板")
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.resize(820, 170)
+        self.setMinimumSize(400, 80)
+
+        central = QWidget()
+        self.setCentralWidget(central)
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._canvas = ScoreboardCanvas()
+        layout.addWidget(self._canvas)
+
+        self._connect_signals()
+
+    def _connect_signals(self):
+        gs = self._gs
+        gs.team_a_name_changed.connect(lambda v: self._update_label("team_a_name", v))
+        gs.team_b_name_changed.connect(lambda v: self._update_label("team_b_name", v))
+        gs.team_a_score_changed.connect(lambda v: self._update_digits("team_a_score", v))
+        gs.team_b_score_changed.connect(lambda v: self._update_digits("team_b_score", v))
+        gs.period_changed.connect(self._update_period)
+        gs.timer_seconds_changed.connect(self._update_timer)
+        gs.overtime_changed.connect(self._update_overtime)
+        gs.scores_reset.connect(self._on_reset)
+        gs.sides_swapped.connect(self._on_reset)
+        gs.sport_changed.connect(lambda _: self._on_reset())
+
+    def load_template(self, template_dir: str):
+        for p in self._file_watcher.files():
+            self._file_watcher.removePath(p)
+
+        config = load_template(template_dir)
+        self._template_config = config
+        self._template_dir = template_dir
+        self._original_opacity = config.background.opacity
+
+        rw = config.resolution_width
+        rh = config.resolution_height
+        self._scale_factor = min(self.width() / rw, self.height() / rh)
+        self._canvas.set_scale_factor(self._scale_factor)
+        self._canvas.set_config(config)
+
+        json_path = os.path.join(template_dir, "template.json")
+        if os.path.exists(json_path):
+            self._file_watcher.addPath(json_path)
+
+        self._on_reset()
+
+        self.resize(max(400, rw // 3), max(80, rh // 3))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        rw = self._template_config.resolution_width if self._template_config else 1920
+        rh = self._template_config.resolution_height if self._template_config else 1080
+        self._scale_factor = min(self.width() / rw, self.height() / rh)
+        self._canvas.set_scale_factor(self._scale_factor)
+        self._canvas.reposition()
+
+    def _on_template_file_changed(self, path: str):
+        if path not in self._file_watcher.files() and os.path.exists(path):
+            self._file_watcher.addPath(path)
+        if self._reload_debounce.isActive():
+            self._reload_debounce.stop()
+        self._reload_debounce.start(300)
+
+    def _do_reload_template(self):
+        if not self._template_dir:
+            return
+        json_path = os.path.join(self._template_dir, "template.json")
+        if not os.path.exists(json_path):
+            return
+        try:
+            self.load_template(self._template_dir)
+        except Exception as e:
+            print(f"[Scoreboard] 模板热重载失败: {e}")
+
+    def _update_label(self, elem_id: str, text: str):
+        w = self._canvas.get_widget(elem_id)
+        if isinstance(w, QLabel):
+            w.setText(text)
+
+    def _update_digits(self, elem_id: str, value: int):
+        w = self._canvas.get_widget(elem_id)
+        if isinstance(w, QLabel):
+            cfg = self._template_config
+            elem = cfg.elements.get(elem_id) if cfg else None
+            digits = elem.min_digits if elem else 2
+            w.setText(str(value).zfill(digits))
+
+    def _update_period(self, current: int, total: int):
+        gs = self._gs
+        if gs.is_overtime:
+            label = gs.sport_config.overtime_label
+        else:
+            labels = gs.sport_config.period_labels
+            label = labels[current - 1] if current - 1 < len(labels) else str(current)
+        self._update_label("period", label)
+
+    def _update_timer(self, seconds: int):
+        w = self._canvas.get_widget("timer")
+        if not isinstance(w, QLabel):
+            return
+        cfg = self._template_config
+        elem = cfg.elements.get("timer") if cfg else None
+        fmt = elem.format if elem else "mm:ss"
+
+        neg = seconds < 0
+        secs = abs(seconds)
+        h = secs // 3600
+        m = (secs % 3600) // 60
+        s = secs % 60
+        prefix = "-" if neg else ""
+
+        if "h" in fmt.lower():
+            text = f"{prefix}{h:02d}:{m:02d}:{s:02d}"
+        else:
+            text = f"{prefix}{m:02d}:{s:02d}"
+        w.setText(text)
+
+        should_blink = (seconds <= 10 and seconds > 0
+                        and self._gs.sport_config.timer_mode == "countdown"
+                        and self._gs.is_running)
+        if should_blink and not self._blinking:
+            self._start_blink(w, elem)
+
+    def _start_blink(self, label: QLabel, elem: ElementConfig | None):
+        self._blinking = True
+        self._blink_label = label
+        self._blink_normal_color = elem.color if elem else "#ffffff"
+        self._blink_timer.start(500)
+
+    def _toggle_blink(self):
+        if not self._blinking or not self._blink_label:
+            return
+        self._blink_visible = not self._blink_visible
+        color = self._blink_normal_color if self._blink_visible else "#ff4444"
+        self._blink_label.setStyleSheet(
+            f"color: {color}; background: transparent; padding: 0px;"
+        )
+        if self._gs.timer_seconds > 10 or not self._gs.is_running:
+            self._stop_blink()
+
+    def _stop_blink(self):
+        self._blinking = False
+        self._blink_timer.stop()
+        if self._blink_label:
+            self._blink_label.setStyleSheet(
+                f"color: {self._blink_normal_color}; background: transparent; padding: 0px;"
+            )
+
+    def _update_overtime(self, is_ot: bool):
+        self._update_label("overtime", "加时赛" if is_ot else "")
+        gs = self._gs
+        self._update_period(gs.period, gs.periods_count)
+
+    def _on_reset(self):
+        gs = self._gs
+        self._update_label("team_a_name", gs.team_a_name)
+        self._update_label("team_b_name", gs.team_b_name)
+        self._update_digits("team_a_score", gs.team_a_score)
+        self._update_digits("team_b_score", gs.team_b_score)
+        self._update_timer(gs.timer_seconds)
+        self._update_period(gs.period, gs.periods_count)
+        self._update_overtime(gs.is_overtime)
+        self._stop_blink()
+
+    def set_stay_on_top(self, enabled: bool):
+        self._stay_on_top = enabled
+        was_visible = self.isVisible()
+        flags = self.windowFlags()
+        if enabled:
+            flags |= Qt.WindowType.WindowStaysOnTopHint
+        else:
+            flags &= ~Qt.WindowType.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        if was_visible:
+            self.show()
+
+    def set_opacity(self, opacity: float):
+        if self._template_config:
+            self._template_config.background.opacity = opacity
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, opacity < 1.0)
+        self._canvas.set_config(self._template_config)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.hide()
+        elif event.modifiers() & Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_Q:
+            from PySide6.QtWidgets import QApplication
+            QApplication.instance().quit()
+        else:
+            super().keyPressEvent(event)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if event.buttons() & Qt.MouseButton.LeftButton and self._drag_pos is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        self._drag_pos = None
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        hide_act = menu.addAction("隐藏")
+        quit_act = menu.addAction("关闭所有")
+        act = menu.exec(event.globalPos())
+        if act == hide_act:
+            self.hide()
+        elif act == quit_act:
+            from PySide6.QtWidgets import QApplication
+            QApplication.instance().quit()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.visibility_changed.emit(False)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.visibility_changed.emit(True)
+        QTimer.singleShot(0, self._canvas.reposition)

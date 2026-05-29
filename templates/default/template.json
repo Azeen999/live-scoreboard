@@ -1,0 +1,120 @@
+{
+  "template_id": "banner",
+  "name": "粗趣简约横条",
+  "resolution": {
+    "width": 2450,
+    "height": 500
+  },
+  "background": {
+    "color": "#0a0a1a",
+    "gradient": true,
+    "gradient_from": "#0d0d2b",
+    "gradient_to": "#1a1a3e",
+    "opacity": 1.0,
+    "image": ""
+  },
+  "global_style": {
+    "font_family": "Microsoft YaHei"
+  },
+  "elements": {
+    "team_a_name": {
+      "type": "label",
+      "geometry": {
+        "x": 0.1,
+        "y": 0.05,
+        "w": 0.18,
+        "h": 0.18
+      },
+      "font_size": 28,
+      "color": "#ffffff",
+      "alignment": "left"
+    },
+    "team_a_score": {
+      "type": "digits",
+      "geometry": {
+        "x": 0.02,
+        "y": 0.24,
+        "w": 0.18,
+        "h": 0.7
+      },
+      "font_size": 160,
+      "color": "#921de6",
+      "alignment": "center",
+      "min_digits": 2
+    },
+    "timer": {
+      "type": "timer",
+      "geometry": {
+        "x": 0.38,
+        "y": 0.06,
+        "w": 0.24,
+        "h": 0.55
+      },
+      "font_size": 200,
+      "color": "#ffffff",
+      "alignment": "center",
+      "format": "mm:ss"
+    },
+    "period": {
+      "type": "label",
+      "geometry": {
+        "x": 0.38,
+        "y": 0.62,
+        "w": 0.24,
+        "h": 0.2
+      },
+      "font_size": 28,
+      "color": "#aaaaaa",
+      "alignment": "center"
+    },
+    "vs_divider": {
+      "type": "label",
+      "geometry": {
+        "x": 0.2,
+        "y": 0.3,
+        "w": 0.18,
+        "h": 0.4
+      },
+      "font_size": 48,
+      "color": "#555555",
+      "alignment": "center"
+    },
+    "overtime": {
+      "type": "label",
+      "geometry": {
+        "x": 0.38,
+        "y": 0.84,
+        "w": 0.24,
+        "h": 0.14
+      },
+      "font_size": 24,
+      "color": "#ff6d00",
+      "alignment": "center"
+    },
+    "team_b_score": {
+      "type": "digits",
+      "geometry": {
+        "x": 0.8,
+        "y": 0.24,
+        "w": 0.18,
+        "h": 0.7
+      },
+      "font_size": 160,
+      "color": "#ff5252",
+      "alignment": "center",
+      "min_digits": 2
+    },
+    "team_b_name": {
+      "type": "label",
+      "geometry": {
+        "x": 0.7,
+        "y": 0.08,
+        "w": 0.18,
+        "h": 0.18
+      },
+      "font_size": 28,
+      "color": "#ffffff",
+      "alignment": "right"
+    }
+  }
+}
