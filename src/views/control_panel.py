@@ -1,8 +1,10 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QLabel, QComboBox,
                                QVBoxLayout, QHBoxLayout, QPushButton,
                                QLineEdit, QGroupBox, QSpinBox, QStatusBar,
-                               QGridLayout)
+                               QGridLayout, QDialog)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 import os
 
 from src.models.game_state import GameState
@@ -16,6 +18,7 @@ class ControlPanel(QMainWindow):
         super().__init__()
         self._gs = game_state
         self._scoreboard_window = None
+        self._web_controller = None
         self.setWindowTitle("控制面板 - 粗趣计分")
         self.resize(620, 340)
         self.setMinimumSize(520, 300)
@@ -187,12 +190,14 @@ class ControlPanel(QMainWindow):
         self._btn_show = QPushButton("隐藏记分板")
         self._btn_top = QPushButton("悬浮置顶")
         self._btn_center_top = QPushButton("居中显示")
+        self._btn_mobile = QPushButton("手机控制")
         self._btn_top.setCheckable(True)
         self._btn_top.setChecked(False)
 
         all_btns = [
             (self._btn_swap, 0, 0), (self._btn_style, 0, 1), (self._btn_reset, 0, 2),
             (self._btn_show, 1, 0), (self._btn_top, 1, 1), (self._btn_center_top, 1, 2),
+            (self._btn_mobile, 2, 0),
         ]
         for btn, r, c in all_btns:
             btn.setFixedHeight(30)
@@ -221,6 +226,7 @@ class ControlPanel(QMainWindow):
         self._btn_show.clicked.connect(self._toggle_scoreboard)
         self._btn_top.clicked.connect(self._toggle_stay_on_top)
         self._btn_center_top.clicked.connect(self._on_center_top)
+        self._btn_mobile.clicked.connect(self._on_mobile_control)
 
         # ---- GameState signal connections ----
         gs = self._gs
@@ -438,6 +444,55 @@ class ControlPanel(QMainWindow):
     def _on_center_top(self):
         if self._scoreboard_window:
             self._scoreboard_window.center_at_screen_top()
+
+    def set_web_controller(self, controller):
+        self._web_controller = controller
+
+    def _on_mobile_control(self):
+        if not self._web_controller:
+            return
+        url = self._web_controller.address
+        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=260x260&data={url}"
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("手机控制计分板")
+        dlg.resize(340, 420)
+        layout = QVBoxLayout(dlg)
+        layout.setSpacing(10)
+
+        hint = QLabel("手机和电脑连接同一 WiFi\n扫描二维码或输入网址：")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint.setStyleSheet("font-size: 13px; color: #cdd6f4;")
+        layout.addWidget(hint)
+
+        url_label = QLabel(url)
+        url_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        url_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #89b4fa;")
+        url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(url_label)
+
+        # Load QR code image
+        qr_label = QLabel("加载二维码中...")
+        qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(qr_label)
+
+        manager = QNetworkAccessManager()
+        def on_qr_loaded(reply):
+            data = reply.readAll()
+            pix = QPixmap()
+            pix.loadFromData(data)
+            qr_label.setPixmap(pix.scaled(260, 260, Qt.AspectRatioMode.KeepAspectRatio,
+                                          Qt.TransformationMode.SmoothTransformation))
+            qr_label.setFixedSize(260, 260)
+        manager.finished.connect(on_qr_loaded)
+        manager.get(QNetworkRequest(qr_url))
+
+        close_btn = QPushButton("关闭")
+        close_btn.clicked.connect(dlg.accept)
+        close_btn.setStyleSheet("padding: 8px 30px; font-size: 14px;")
+        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        dlg.exec()
 
     def closeEvent(self, event):
         from PySide6.QtWidgets import QApplication

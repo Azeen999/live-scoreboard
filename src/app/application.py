@@ -7,6 +7,7 @@ from src.views.control_panel import ControlPanel
 from src.views.scoreboard_window import ScoreboardWindow
 from src.config.sports import SPORTS
 from src.utils.resource_path import get_resource_path
+from src.web_controller import WebController
 
 # Dark theme QSS for control panel only — must not affect the scoreboard window
 DARK_QSS = """
@@ -96,6 +97,11 @@ class ScoreboardApp:
 
         self.scoreboard_window = ScoreboardWindow(self.game_state)
         self.control_panel.set_scoreboard_window(self.scoreboard_window)
+
+        # Mobile web controller
+        self.web_controller = WebController(self.game_state)
+        self.web_controller.start()
+        self.control_panel.set_web_controller(self.web_controller)
 
         self._load_initial_template(template_id)
 
