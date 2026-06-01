@@ -438,10 +438,13 @@ class ScoreboardWindow(QMainWindow):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
+        top_act = menu.addAction("取消置顶" if self._stay_on_top else "置顶")
         hide_act = menu.addAction("隐藏")
         quit_act = menu.addAction("关闭所有")
         act = menu.exec(event.globalPos())
-        if act == hide_act:
+        if act == top_act:
+            self.set_stay_on_top(not self._stay_on_top)
+        elif act == hide_act:
             self.hide()
         elif act == quit_act:
             from PySide6.QtWidgets import QApplication

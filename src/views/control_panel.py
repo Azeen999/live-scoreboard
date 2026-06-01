@@ -185,8 +185,8 @@ class ControlPanel(QMainWindow):
         self._btn_style = QPushButton("样式")
         self._btn_reset = QPushButton("全部重置")
         self._btn_show = QPushButton("隐藏记分板")
-        self._btn_top = QPushButton("置顶")
-        self._btn_center_top = QPushButton("居中置顶")
+        self._btn_top = QPushButton("悬浮置顶")
+        self._btn_center_top = QPushButton("居中显示")
         self._btn_top.setCheckable(True)
         self._btn_top.setChecked(False)
 
@@ -416,7 +416,7 @@ class ControlPanel(QMainWindow):
             self._btn_show.setText("隐藏记分板")
 
     def _toggle_stay_on_top(self, checked: bool):
-        self._btn_top.setText("取消置顶" if checked else "置顶")
+        self._btn_top.setText("取消悬浮置顶" if checked else "悬浮置顶")
         self._scoreboard_window.set_stay_on_top(checked)
 
     def _open_style_editor(self):
