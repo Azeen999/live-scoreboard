@@ -167,6 +167,9 @@ class ScoreboardWindow(QMainWindow):
         self._blink_label = None
         self._drag_pos = None
         self._stay_on_top = False
+        self._resize_mode = False
+        self._resize_edge = None  # 'n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'
+        self._resize_margin = 8
         self._original_opacity: float = 1.0
 
         self._template_dir = ""
@@ -425,25 +428,85 @@ class ScoreboardWindow(QMainWindow):
         else:
             super().keyPressEvent(event)
 
+    def _get_edge(self, pos):
+        """Detect which edge the mouse is near. Returns None if not near an edge."""
+        x, y = pos.x(), pos.y()
+        w, h = self.width(), self.height()
+        m = self._resize_margin
+        edge = ""
+        if y < m:
+            edge += "n"
+        elif y > h - m:
+            edge += "s"
+        if x < m:
+            edge += "w"
+        elif x > w - m:
+            edge += "e"
+        return edge or None
+
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
+            if self._resize_mode:
+                edge = self._get_edge(event.pos())
+                if edge:
+                    self._resize_edge = edge
+                    self._drag_pos = event.globalPosition().toPoint()
+                    return
+            self._resize_edge = None
             self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        if event.buttons() & Qt.MouseButton.LeftButton and self._drag_pos is not None:
+        if self._resize_edge and event.buttons() & Qt.MouseButton.LeftButton:
+            # Resizing
+            delta = event.globalPosition().toPoint() - self._drag_pos
+            g = self.geometry()
+            if "e" in self._resize_edge:
+                g.setWidth(max(self.minimumWidth(), g.width() + delta.x()))
+            if "s" in self._resize_edge:
+                g.setHeight(max(self.minimumHeight(), g.height() + delta.y()))
+            if "w" in self._resize_edge:
+                new_w = max(self.minimumWidth(), g.width() - delta.x())
+                g.setX(g.x() + g.width() - new_w)
+                g.setWidth(new_w)
+            if "n" in self._resize_edge:
+                new_h = max(self.minimumHeight(), g.height() - delta.y())
+                g.setY(g.y() + g.height() - new_h)
+                g.setHeight(new_h)
+            self.setGeometry(g)
+            self._drag_pos = event.globalPosition().toPoint()
+        elif event.buttons() & Qt.MouseButton.LeftButton and self._drag_pos is not None:
             self.move(event.globalPosition().toPoint() - self._drag_pos)
+        elif self._resize_mode and not event.buttons():
+            # Update cursor
+            edge = self._get_edge(event.pos())
+            cursors = {
+                "n": Qt.CursorShape.SizeVerCursor,
+                "s": Qt.CursorShape.SizeVerCursor,
+                "e": Qt.CursorShape.SizeHorCursor,
+                "w": Qt.CursorShape.SizeHorCursor,
+                "ne": Qt.CursorShape.SizeBDiagCursor,
+                "sw": Qt.CursorShape.SizeBDiagCursor,
+                "nw": Qt.CursorShape.SizeFDiagCursor,
+                "se": Qt.CursorShape.SizeFDiagCursor,
+            }
+            self.setCursor(cursors.get(edge, Qt.CursorShape.ArrowCursor))
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         self._drag_pos = None
+        self._resize_edge = None
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         top_act = menu.addAction("取消置顶" if self._stay_on_top else "置顶")
+        resize_act = menu.addAction("锁定大小" if self._resize_mode else "改变大小")
         hide_act = menu.addAction("隐藏")
         quit_act = menu.addAction("关闭所有")
         act = menu.exec(event.globalPos())
         if act == top_act:
             self.set_stay_on_top(not self._stay_on_top)
+        elif act == resize_act:
+            self._resize_mode = not self._resize_mode
+            self.setCursor(Qt.CursorShape.ArrowCursor)
         elif act == hide_act:
             self.hide()
         elif act == quit_act:
