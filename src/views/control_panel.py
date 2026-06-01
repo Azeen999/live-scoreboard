@@ -52,7 +52,7 @@ class ControlPanel(QMainWindow):
         grp_a = QGroupBox("左队")
         la = QVBoxLayout(grp_a)
         la.setSpacing(2)
-        la.setContentsMargins(6, 16, 6, 4)
+        la.setContentsMargins(6, 12, 6, 6)
         self._name_a = QLineEdit(self._gs.team_a_name)
         self._name_a.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._name_a.setMaximumHeight(24)
@@ -60,7 +60,9 @@ class ControlPanel(QMainWindow):
 
         self._score_a = QLabel("0")
         self._score_a.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._score_a.setStyleSheet("font-size: 32px; font-weight: bold; color: #00e676;")
+        self._score_a_color = "#ffffff"
+        self._score_a_original_color = "#ffffff"
+        self._score_a.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {self._score_a_color};")
         self._score_a.setMaximumHeight(40)
         la.addWidget(self._score_a)
 
@@ -68,7 +70,7 @@ class ControlPanel(QMainWindow):
         btns_a.setSpacing(2)
         for label, delta in [("-1", -1), ("+1", 1)]:
             btn = QPushButton(label)
-            btn.setFixedSize(44, 24)
+            btn.setFixedSize(44, 28)
             btn.clicked.connect(lambda checked, d=delta: self._gs.increment_score("A", d))
             btns_a.addWidget(btn)
         la.addLayout(btns_a)
@@ -78,13 +80,13 @@ class ControlPanel(QMainWindow):
         grp_t = QGroupBox("计时器")
         lt = QVBoxLayout(grp_t)
         lt.setSpacing(2)
-        lt.setContentsMargins(6, 16, 6, 4)
+        lt.setContentsMargins(6, 12, 6, 6)
 
         mode_row = QHBoxLayout()
         mode_row.setSpacing(4)
         self._btn_mode = QPushButton("倒计时")
         self._btn_mode.setCheckable(True)
-        self._btn_mode.setFixedHeight(24)
+        self._btn_mode.setFixedHeight(28)
         self._btn_mode.setToolTip("点击切换 倒计时/秒表")
         mode_row.addWidget(self._btn_mode)
         mode_row.addStretch()
@@ -120,7 +122,7 @@ class ControlPanel(QMainWindow):
         self._btn_pause = QPushButton("暂停")
         self._btn_reset_t = QPushButton("重置")
         for b in (self._btn_start, self._btn_pause, self._btn_reset_t):
-            b.setFixedHeight(24)
+            b.setFixedHeight(28)
             tbtns.addWidget(b)
         lt.addLayout(tbtns)
 
@@ -135,7 +137,7 @@ class ControlPanel(QMainWindow):
         grp_b = QGroupBox("右队")
         lb = QVBoxLayout(grp_b)
         lb.setSpacing(2)
-        lb.setContentsMargins(6, 16, 6, 4)
+        lb.setContentsMargins(6, 12, 6, 6)
         self._name_b = QLineEdit(self._gs.team_b_name)
         self._name_b.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._name_b.setMaximumHeight(24)
@@ -143,7 +145,9 @@ class ControlPanel(QMainWindow):
 
         self._score_b = QLabel("0")
         self._score_b.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._score_b.setStyleSheet("font-size: 32px; font-weight: bold; color: #ff5252;")
+        self._score_b_color = "#ffffff"
+        self._score_b_original_color = "#ffffff"
+        self._score_b.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {self._score_b_color};")
         self._score_b.setMaximumHeight(40)
         lb.addWidget(self._score_b)
 
@@ -151,7 +155,7 @@ class ControlPanel(QMainWindow):
         btns_b.setSpacing(2)
         for label, delta in [("-1", -1), ("+1", 1)]:
             btn = QPushButton(label)
-            btn.setFixedSize(44, 24)
+            btn.setFixedSize(44, 28)
             btn.clicked.connect(lambda checked, d=delta: self._gs.increment_score("B", d))
             btns_b.addWidget(btn)
         lb.addLayout(btns_b)
@@ -165,7 +169,7 @@ class ControlPanel(QMainWindow):
 
         grp_p = QGroupBox("节次")
         lp = QHBoxLayout(grp_p)
-        lp.setContentsMargins(6, 14, 6, 4)
+        lp.setContentsMargins(6, 10, 6, 6)
         lp.setSpacing(4)
         self._period_combo = QComboBox()
         self._period_combo.setMinimumHeight(24)
@@ -182,17 +186,16 @@ class ControlPanel(QMainWindow):
         self._btn_reset = QPushButton("全部重置")
         self._btn_show = QPushButton("隐藏记分板")
         self._btn_top = QPushButton("置顶")
-        self._btn_ot = QPushButton("加时")
+        self._btn_center_top = QPushButton("居中置顶")
         self._btn_top.setCheckable(True)
         self._btn_top.setChecked(False)
-        self._btn_ot.setCheckable(True)
 
         all_btns = [
             (self._btn_swap, 0, 0), (self._btn_style, 0, 1), (self._btn_reset, 0, 2),
-            (self._btn_show, 1, 0), (self._btn_top, 1, 1), (self._btn_ot, 1, 2),
+            (self._btn_show, 1, 0), (self._btn_top, 1, 1), (self._btn_center_top, 1, 2),
         ]
         for btn, r, c in all_btns:
-            btn.setFixedHeight(26)
+            btn.setFixedHeight(30)
             btn_grid.addWidget(btn, r, c)
 
         bottom_row.addLayout(btn_grid, 1)
@@ -212,11 +215,12 @@ class ControlPanel(QMainWindow):
         self._name_b.editingFinished.connect(self._on_names_changed)
 
         self._btn_swap.clicked.connect(self._gs.swap_sides)
+        self._btn_swap.clicked.connect(self._on_swap_colors)
         self._btn_style.clicked.connect(self._open_style_editor)
         self._btn_reset.clicked.connect(self._gs.reset_all)
         self._btn_show.clicked.connect(self._toggle_scoreboard)
         self._btn_top.clicked.connect(self._toggle_stay_on_top)
-        self._btn_ot.clicked.connect(self._gs.toggle_overtime)
+        self._btn_center_top.clicked.connect(self._on_center_top)
 
         # ---- GameState signal connections ----
         gs = self._gs
@@ -288,14 +292,29 @@ class ControlPanel(QMainWindow):
         self._period_combo.clear()
         for label in self._gs.sport_config.period_labels:
             self._period_combo.addItem(label)
-        self._period_combo.setCurrentIndex(self._gs.period - 1)
+        # Add overtime as last option
+        if self._gs.sport_config.has_overtime:
+            self._period_combo.addItem(self._gs.sport_config.overtime_label)
+        # Select current period, or overtime if active
+        if self._gs.is_overtime:
+            self._period_combo.setCurrentIndex(self._period_combo.count() - 1)
+        else:
+            self._period_combo.setCurrentIndex(self._gs.period - 1)
         self._period_combo.blockSignals(False)
 
     def _on_period_changed(self, idx: int):
-        if idx >= 0:
+        if idx < 0:
+            return
+        ot_index = self._gs.sport_config.periods_count  # overtime is last item
+        if self._gs.sport_config.has_overtime and idx == ot_index:
+            self._gs.set_overtime(True)
+        else:
+            self._gs.set_overtime(False)
             self._gs.set_period(idx + 1)
 
     def _on_state_period(self, current: int, total: int):
+        if self._gs.is_overtime:
+            return  # overtime handles its own combo selection via _on_ot
         self._period_combo.blockSignals(True)
         self._period_combo.setCurrentIndex(current - 1)
         self._period_combo.blockSignals(False)
@@ -347,8 +366,13 @@ class ControlPanel(QMainWindow):
         self._status.showMessage("时间到！", 5000)
 
     def _on_ot(self, is_ot: bool):
-        self._btn_ot.setChecked(is_ot)
-        self._btn_ot.setText("取消加时" if is_ot else "加时")
+        # Sync period combo to show overtime or restore current period
+        self._period_combo.blockSignals(True)
+        if is_ot:
+            self._period_combo.setCurrentIndex(self._period_combo.count() - 1)
+        else:
+            self._period_combo.setCurrentIndex(self._gs.period - 1)
+        self._period_combo.blockSignals(False)
 
     def _on_reset(self):
         gs = self._gs
@@ -359,10 +383,25 @@ class ControlPanel(QMainWindow):
         self._update_timer_display(gs.timer_seconds)
         self._btn_start.setEnabled(True)
         self._btn_pause.setEnabled(False)
+        # Reset score colors to template originals
+        self._score_a_color = self._score_a_original_color
+        self._score_b_color = self._score_b_original_color
+        self._score_a.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {self._score_a_color};")
+        self._score_b.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {self._score_b_color};")
 
     def set_scoreboard_window(self, window):
         self._scoreboard_window = window
         self._scoreboard_window.visibility_changed.connect(self._on_scoreboard_visibility)
+        self._scoreboard_window.template_loaded.connect(self._on_template_colors)
+
+    def _on_template_colors(self, color_a: str, color_b: str):
+        """Sync control panel score colors with the scoreboard template."""
+        self._score_a_color = color_a
+        self._score_b_color = color_b
+        self._score_a_original_color = color_a
+        self._score_b_original_color = color_b
+        self._score_a.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color_a};")
+        self._score_b.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color_b};")
 
     def _on_scoreboard_visibility(self, visible: bool):
         self._btn_show.setText("显示记分板" if not visible else "隐藏记分板")
@@ -389,6 +428,16 @@ class ControlPanel(QMainWindow):
             return
         editor = StyleEditor(template_dir, self._scoreboard_window, self)
         editor.exec()
+
+    def _on_swap_colors(self):
+        """Swap score label colors in the control panel."""
+        self._score_a_color, self._score_b_color = self._score_b_color, self._score_a_color
+        self._score_a.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {self._score_a_color};")
+        self._score_b.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {self._score_b_color};")
+
+    def _on_center_top(self):
+        if self._scoreboard_window:
+            self._scoreboard_window.center_at_screen_top()
 
     def closeEvent(self, event):
         from PySide6.QtWidgets import QApplication

@@ -77,7 +77,7 @@ class ScoreboardCanvas(QWidget):
             label.setText("00:00")
         elif elem_id == "vs_divider":
             label.setText("VS")
-        label.show()
+        label.setVisible(elem.visible)
         return label
 
     def get_widget(self, elem_id: str) -> QWidget | None:
@@ -153,6 +153,7 @@ class ScoreboardCanvas(QWidget):
 
 class ScoreboardWindow(QMainWindow):
     visibility_changed = Signal(bool)
+    template_loaded = Signal(str, str)  # (score_a_color, score_b_color)
 
     def __init__(self, game_state: GameState):
         super().__init__()
@@ -177,10 +178,13 @@ class ScoreboardWindow(QMainWindow):
 
         self.setWindowTitle("粗趣计分 - 记分板")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.resize(820, 170)
         self.setMinimumSize(400, 80)
 
         central = QWidget()
+        central.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        central.setStyleSheet("background: transparent;")
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -188,6 +192,10 @@ class ScoreboardWindow(QMainWindow):
 
         self._canvas = ScoreboardCanvas()
         layout.addWidget(self._canvas)
+
+        self._sides_swapped = False
+        self._score_a_color = "#ffffff"
+        self._score_b_color = "#ffffff"
 
         self._connect_signals()
 
@@ -201,7 +209,7 @@ class ScoreboardWindow(QMainWindow):
         gs.timer_seconds_changed.connect(self._update_timer)
         gs.overtime_changed.connect(self._update_overtime)
         gs.scores_reset.connect(self._on_reset)
-        gs.sides_swapped.connect(self._on_reset)
+        gs.sides_swapped.connect(self._on_sides_swapped)
         gs.sport_changed.connect(lambda _: self._on_reset())
 
     def load_template(self, template_dir: str):
@@ -219,6 +227,13 @@ class ScoreboardWindow(QMainWindow):
         self._canvas.set_scale_factor(self._scale_factor)
         self._canvas.set_config(config)
 
+        # Store original score colors for side-swap
+        a_cfg = config.elements.get("team_a_score")
+        b_cfg = config.elements.get("team_b_score")
+        self._score_a_color = a_cfg.color if a_cfg else "#ffffff"
+        self._score_b_color = b_cfg.color if b_cfg else "#ffffff"
+        self._sides_swapped = False
+
         json_path = os.path.join(template_dir, "template.json")
         if os.path.exists(json_path):
             self._file_watcher.addPath(json_path)
@@ -226,6 +241,7 @@ class ScoreboardWindow(QMainWindow):
         self._on_reset()
 
         self.resize(max(400, rw // 3), max(80, rh // 3))
+        self.template_loaded.emit(self._score_a_color, self._score_b_color)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -297,7 +313,7 @@ class ScoreboardWindow(QMainWindow):
         w.setText(text)
 
         should_blink = (seconds <= 10 and seconds > 0
-                        and self._gs.sport_config.timer_mode == "countdown"
+                        and self._gs.timer_mode == "countdown"
                         and self._gs.is_running)
         if should_blink and not self._blinking:
             self._start_blink(w, elem)
@@ -328,7 +344,7 @@ class ScoreboardWindow(QMainWindow):
             )
 
     def _update_overtime(self, is_ot: bool):
-        self._update_label("overtime", "加时赛" if is_ot else "")
+        # Overtime is shown via the period label (switches to overtime_label)
         gs = self._gs
         self._update_period(gs.period, gs.periods_count)
 
@@ -342,6 +358,23 @@ class ScoreboardWindow(QMainWindow):
         self._update_period(gs.period, gs.periods_count)
         self._update_overtime(gs.is_overtime)
         self._stop_blink()
+        self._sides_swapped = False
+        self._apply_score_colors()
+
+    def _on_sides_swapped(self):
+        self._sides_swapped = not self._sides_swapped
+        self._apply_score_colors()
+
+    def _apply_score_colors(self):
+        """Apply score colors, swapping if sides are swapped."""
+        color_a = self._score_b_color if self._sides_swapped else self._score_a_color
+        color_b = self._score_a_color if self._sides_swapped else self._score_b_color
+        for eid, color in [("team_a_score", color_a), ("team_b_score", color_b)]:
+            w = self._canvas.get_widget(eid)
+            if isinstance(w, QLabel):
+                w.setStyleSheet(
+                    f"color: {color}; background: transparent; padding: 0px; margin: 0px; letter-spacing: 2px;"
+                )
 
     def set_stay_on_top(self, enabled: bool):
         self._stay_on_top = enabled
@@ -355,11 +388,33 @@ class ScoreboardWindow(QMainWindow):
         if was_visible:
             self.show()
 
+    def center_at_screen_top(self):
+        """Center the scoreboard window at the top of the screen."""
+        from PySide6.QtGui import QScreen
+        screen = self.screen()
+        if not screen:
+            return
+        geo = screen.availableGeometry()
+        x = geo.x() + (geo.width() - self.width()) // 2
+        y = geo.y()
+        self.move(x, y)
+        if not self.isVisible():
+            self.show()
+
+    def update_element_position(self, eid: str, geo: dict):
+        """Live-update a single element's geometry without full reload."""
+        if self._template_config and eid in self._template_config.elements:
+            elem = self._template_config.elements[eid]
+            for k in ("x", "y", "w", "h"):
+                if k in geo:
+                    elem.geometry[k] = geo[k]
+            self._canvas.reposition()
+
     def set_opacity(self, opacity: float):
+        """Update background opacity without rebuilding overlay widgets."""
         if self._template_config:
             self._template_config.background.opacity = opacity
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, opacity < 1.0)
-        self._canvas.set_config(self._template_config)
+        self._canvas.update()  # repaint only, no rebuild
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:

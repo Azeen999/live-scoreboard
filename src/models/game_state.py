@@ -106,7 +106,11 @@ class GameState(QObject):
         if 1 <= period <= self._sport_config.periods_count:
             self._period = period
             self._is_running = False
-            self._timer_seconds = self._sport_config.period_duration_seconds
+            # Use halftime duration if this period is the halftime break
+            if period == self._sport_config.halftime_index:
+                self._timer_seconds = self._sport_config.halftime_duration_seconds
+            else:
+                self._timer_seconds = self._sport_config.period_duration_seconds
             self.period_changed.emit(self._period, self._sport_config.periods_count)
             self.timer_seconds_changed.emit(self._timer_seconds)
             self.timer_running_changed.emit(False)
@@ -156,7 +160,10 @@ class GameState(QObject):
         if self._timer_mode == "countup":
             self._timer_seconds = 0
         else:
-            self._timer_seconds = self._sport_config.period_duration_seconds
+            if self._period == self._sport_config.halftime_index:
+                self._timer_seconds = self._sport_config.halftime_duration_seconds
+            else:
+                self._timer_seconds = self._sport_config.period_duration_seconds
         self.timer_seconds_changed.emit(self._timer_seconds)
         self.timer_running_changed.emit(False)
 
@@ -180,6 +187,26 @@ class GameState(QObject):
     def is_overtime(self) -> bool:
         return self._is_overtime
 
+    def set_overtime(self, active: bool):
+        """Activate or deactivate overtime explicitly (for period combo)."""
+        if active == self._is_overtime:
+            return
+        self._is_overtime = active
+        if self._is_overtime:
+            self._timer_seconds = self._sport_config.overtime_duration_seconds
+            self._is_running = False
+            self.timer_seconds_changed.emit(self._timer_seconds)
+            self.timer_running_changed.emit(False)
+        else:
+            if self._period == self._sport_config.halftime_index:
+                self._timer_seconds = self._sport_config.halftime_duration_seconds
+            else:
+                self._timer_seconds = self._sport_config.period_duration_seconds
+            self._is_running = False
+            self.timer_seconds_changed.emit(self._timer_seconds)
+            self.timer_running_changed.emit(False)
+        self.overtime_changed.emit(self._is_overtime)
+
     def toggle_overtime(self):
         self._is_overtime = not self._is_overtime
         if self._is_overtime:
@@ -188,7 +215,10 @@ class GameState(QObject):
             self.timer_seconds_changed.emit(self._timer_seconds)
             self.timer_running_changed.emit(False)
         else:
-            self._timer_seconds = self._sport_config.period_duration_seconds
+            if self._period == self._sport_config.halftime_index:
+                self._timer_seconds = self._sport_config.halftime_duration_seconds
+            else:
+                self._timer_seconds = self._sport_config.period_duration_seconds
             self._is_running = False
             self.timer_seconds_changed.emit(self._timer_seconds)
             self.timer_running_changed.emit(False)

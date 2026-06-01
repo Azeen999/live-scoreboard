@@ -19,3 +19,5 @@ class SportConfig:
     timer_mode: str = "countdown"  # "countdown" or "countup"
     score_increment_buttons: list = field(default_factory=lambda: [1])
     preset_durations: list = field(default_factory=list)
+    halftime_index: int = 0  # 0 = no halftime; >0 = 1-based index of halftime period
+    halftime_duration_seconds: int = 300  # default 5 min

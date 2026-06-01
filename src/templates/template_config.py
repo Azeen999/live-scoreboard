@@ -16,6 +16,7 @@ class ElementConfig:
     dot_color: str = "#ffab00"
     dot_radius: int = 8
     spacing: int = 25
+    visible: bool = True  # can be toggled to hide element on scoreboard
 
 
 @dataclass
@@ -66,6 +67,7 @@ class TemplateConfig:
                 dot_color=elem_data.get("dot_color", "#ffab00"),
                 dot_radius=elem_data.get("dot_radius", 8),
                 spacing=elem_data.get("spacing", 25),
+                visible=elem_data.get("visible", True),
             )
         return cls(
             template_id=data.get("template_id", ""),

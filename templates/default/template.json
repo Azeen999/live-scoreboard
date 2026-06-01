@@ -21,32 +21,33 @@
       "type": "label",
       "geometry": {
         "x": 0.1,
-        "y": 0.05,
+        "y": 0.15,
         "w": 0.18,
         "h": 0.18
       },
-      "font_size": 28,
+      "font_size": 50,
       "color": "#ffffff",
       "alignment": "left"
     },
     "team_a_score": {
       "type": "digits",
       "geometry": {
-        "x": 0.02,
-        "y": 0.24,
+        "x": 0.04,
+        "y": 0.2,
         "w": 0.18,
         "h": 0.7
       },
       "font_size": 160,
       "color": "#921de6",
       "alignment": "center",
-      "min_digits": 2
+      "min_digits": 2,
+      "visible": true
     },
     "timer": {
       "type": "timer",
       "geometry": {
-        "x": 0.38,
-        "y": 0.06,
+        "x": 0.39,
+        "y": 0.27,
         "w": 0.24,
         "h": 0.55
       },
@@ -58,44 +59,34 @@
     "period": {
       "type": "label",
       "geometry": {
-        "x": 0.38,
-        "y": 0.62,
+        "x": 0.4,
+        "y": 0.72,
         "w": 0.24,
-        "h": 0.2
+        "h": 0.16
       },
-      "font_size": 28,
+      "font_size": 40,
       "color": "#aaaaaa",
-      "alignment": "center"
+      "alignment": "center",
+      "visible": false
     },
     "vs_divider": {
       "type": "label",
       "geometry": {
-        "x": 0.2,
-        "y": 0.3,
+        "x": 0.42,
+        "y": 0.2,
         "w": 0.18,
-        "h": 0.4
+        "h": 0.12
       },
-      "font_size": 48,
+      "font_size": 80,
       "color": "#555555",
-      "alignment": "center"
-    },
-    "overtime": {
-      "type": "label",
-      "geometry": {
-        "x": 0.38,
-        "y": 0.84,
-        "w": 0.24,
-        "h": 0.14
-      },
-      "font_size": 24,
-      "color": "#ff6d00",
-      "alignment": "center"
+      "alignment": "center",
+      "visible": true
     },
     "team_b_score": {
       "type": "digits",
       "geometry": {
-        "x": 0.8,
-        "y": 0.24,
+        "x": 0.76,
+        "y": 0.2,
         "w": 0.18,
         "h": 0.7
       },
@@ -108,11 +99,11 @@
       "type": "label",
       "geometry": {
         "x": 0.7,
-        "y": 0.08,
+        "y": 0.15,
         "w": 0.18,
         "h": 0.18
       },
-      "font_size": 28,
+      "font_size": 50,
       "color": "#ffffff",
       "alignment": "right"
     }

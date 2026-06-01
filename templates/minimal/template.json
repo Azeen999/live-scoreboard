@@ -29,7 +29,7 @@
     },
     "timer": {
       "type": "timer",
-      "geometry": {"x": 0.36, "y": 0.06, "w": 0.28, "h": 0.62},
+      "geometry": {"x": 0.36, "y": 0.02, "w": 0.28, "h": 0.58},
       "font_size": 220,
       "color": "#ffffff",
       "alignment": "center",
@@ -37,9 +37,16 @@
     },
     "period": {
       "type": "label",
-      "geometry": {"x": 0.36, "y": 0.64, "w": 0.28, "h": 0.22},
-      "font_size": 36,
+      "geometry": {"x": 0.36, "y": 0.72, "w": 0.28, "h": 0.16},
+      "font_size": 40,
       "color": "#888888",
+      "alignment": "center"
+    },
+    "vs_divider": {
+      "type": "label",
+      "geometry": {"x": 0.41, "y": 0.58, "w": 0.18, "h": 0.12},
+      "font_size": 70,
+      "color": "#555555",
       "alignment": "center"
     },
     "team_b_score": {
@@ -55,13 +62,6 @@
       "geometry": {"x": 0.80, "y": 0.02, "w": 0.18, "h": 0.22},
       "font_size": 30,
       "color": "#ffffff",
-      "alignment": "center"
-    },
-    "overtime": {
-      "type": "label",
-      "geometry": {"x": 0.36, "y": 0.85, "w": 0.28, "h": 0.14},
-      "font_size": 28,
-      "color": "#ff6d00",
       "alignment": "center"
     }
   }

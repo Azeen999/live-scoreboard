@@ -4,7 +4,7 @@ import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QWidget,
     QLabel, QPushButton, QListWidget, QListWidgetItem, QScrollArea,
-    QSpinBox, QDoubleSpinBox, QLineEdit,
+    QSpinBox, QDoubleSpinBox, QLineEdit, QCheckBox,
     QColorDialog, QMessageBox, QFileDialog, QFrame, QSlider,
 )
 from PySide6.QtCore import Qt, QSize
@@ -14,11 +14,14 @@ from PySide6.QtGui import QColor
 class StyleEditor(QDialog):
     ELEMENT_LABELS = {
         "__background__": "背景",
-        "timer": "计时器", "period": "节次", "overtime": "加时赛",
-        "team_a_name": "A队名", "team_a_score": "A队比分",
-        "team_b_name": "B队名", "team_b_score": "B队比分",
+        "__both_teams__": "两队设置",
+        "__layout__": "位置",
+        "timer": "计时器", "period": "节次",
         "vs_divider": "VS",
     }
+
+    # Elements to skip in the list (covered by 两队设置)
+    _TEAM_IDS = {"team_a_name", "team_a_score", "team_b_name", "team_b_score"}
 
     def __init__(self, template_dir: str, scoreboard_window=None, parent=None):
         super().__init__(parent)
@@ -26,12 +29,15 @@ class StyleEditor(QDialog):
         self.json_path = os.path.join(template_dir, "template.json")
         self._scoreboard_window = scoreboard_window
         self._data: dict = {}
+        self._original_data: dict = {}
         self._load()
         self._build_ui()
 
     def _load(self):
         with open(self.json_path, "r", encoding="utf-8") as f:
             self._data = json.load(f)
+        # Snapshot the original so "重置为默认" always works
+        self._original_data = json.loads(json.dumps(self._data))
 
     def _save(self):
         with open(self.json_path, "w", encoding="utf-8") as f:
@@ -39,13 +45,13 @@ class StyleEditor(QDialog):
 
     def _build_ui(self):
         self.setWindowTitle("样式编辑器")
-        self.resize(680, 520)
+        self.resize(780, 600)
 
         root = QVBoxLayout(self)
         root.setSpacing(6)
 
-        hint = QLabel("修改后点击「保存」生效")
-        hint.setStyleSheet("color: #888; font-size: 12px;")
+        hint = QLabel("修改后点击「保存」生效  |  回车确认数值，Ctrl+S 保存")
+        hint.setStyleSheet("color: #888; font-size: 11px;")
         root.addWidget(hint)
 
         body = QHBoxLayout()
@@ -61,29 +67,28 @@ class StyleEditor(QDialog):
 
         right = QVBoxLayout()
         right.addWidget(QLabel("属性"))
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._props_container = QWidget()
-        self._props_form = QFormLayout(self._props_container)
-        self._props_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self._props_form.setSpacing(6)
-        self._props_form.setContentsMargins(8, 8, 8, 8)
-        scroll.setWidget(self._props_container)
-        right.addWidget(scroll)
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._props_form = None
+        self._rebuild_props_container()
+        right.addWidget(self._scroll)
         body.addLayout(right, 1)
 
         root.addLayout(body, 1)
 
         btns = QHBoxLayout()
         self._btn_reset = QPushButton("重置为默认")
+        self._btn_reset.setAutoDefault(False)
         self._btn_reset.clicked.connect(self._on_reset)
         btns.addWidget(self._btn_reset)
         btns.addStretch()
-        self._btn_export = QPushButton("另存为...")
-        self._btn_export.clicked.connect(self._on_export)
-        btns.addWidget(self._btn_export)
+        self._btn_set_default = QPushButton("设为默认")
+        self._btn_set_default.setAutoDefault(False)
+        self._btn_set_default.clicked.connect(self._on_set_default)
+        btns.addWidget(self._btn_set_default)
         self._btn_save = QPushButton("保存")
+        self._btn_save.setAutoDefault(False)
         self._btn_save.setMinimumHeight(34)
         self._btn_save.setStyleSheet(
             "QPushButton { background-color: #00e676; color: #000; "
@@ -99,9 +104,13 @@ class StyleEditor(QDialog):
     def _populate_list(self):
         self._list.clear()
         self._add_list_item("__background__", "背景")
+        self._add_list_item("__both_teams__", "两队设置")
         for eid in self._data.get("elements", {}):
+            if eid in self._TEAM_IDS:
+                continue
             label = self.ELEMENT_LABELS.get(eid, eid)
             self._add_list_item(eid, label)
+        self._add_list_item("__layout__", "位置")
         if self._list.count() > 0:
             self._list.setCurrentRow(0)
 
@@ -111,11 +120,21 @@ class StyleEditor(QDialog):
         item.setSizeHint(item.sizeHint() + QSize(0, 6))
         self._list.addItem(item)
 
+    def _rebuild_props_container(self):
+        if self._props_form is not None:
+            old_container = self._props_form.parentWidget()
+            if old_container:
+                old_container.setParent(None)
+                old_container.deleteLater()
+        container = QWidget()
+        self._props_form = QFormLayout(container)
+        self._props_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._props_form.setSpacing(6)
+        self._props_form.setContentsMargins(8, 8, 8, 8)
+        self._scroll.setWidget(container)
+
     def _on_select(self, current, previous):
-        while self._props_form.count():
-            item = self._props_form.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        self._rebuild_props_container()
 
         if not current:
             return
@@ -123,19 +142,29 @@ class StyleEditor(QDialog):
         eid = current.data(Qt.ItemDataRole.UserRole)
         if eid == "__background__":
             self._build_background_props()
+        elif eid == "__both_teams__":
+            self._build_both_teams_props()
+        elif eid == "__layout__":
+            self._build_layout_props()
         else:
             self._build_element_props(eid)
 
     def _build_background_props(self):
         bg = self._data.setdefault("background", {})
-        self._add_color_picker("背景颜色", bg, "color", "#0d0d1a")
 
+        # Gradient toggle
+        grad_cb = QCheckBox("使用渐变")
+        grad_cb.setChecked(bg.get("gradient", False))
+        grad_cb.setStyleSheet("color: #ccc; font-size: 12px;")
+        grad_cb.toggled.connect(lambda checked: self._set(bg, "gradient", checked))
+        self._props_form.addRow(grad_cb)
+
+        self._add_color_picker("背景颜色", bg, "color", "#0d0d1a")
         self._add_opacity_slider("透明度", bg, "opacity")
 
-        has_gradient = bg.get("gradient", False)
-        if has_gradient:
-            self._add_color_picker("渐变起始色", bg, "gradient_from", "#0d0d1a")
-            self._add_color_picker("渐变结束色", bg, "gradient_to", "#1a1a3a")
+        # Always show gradient color pickers
+        self._add_color_picker("渐变起始色", bg, "gradient_from", "#0d0d1a")
+        self._add_color_picker("渐变结束色", bg, "gradient_to", "#1a1a3a")
 
         img = bg.get("image", "")
         if img:
@@ -153,28 +182,134 @@ class StyleEditor(QDialog):
         val_label.setFixedWidth(40)
 
         def on_change(v):
-            container[key] = v / 100.0
+            opacity = v / 100.0
+            container[key] = opacity
             val_label.setText(f"{v}%")
+            if self._scoreboard_window:
+                self._scoreboard_window.set_opacity(opacity)
 
         slider.valueChanged.connect(on_change)
         row.addWidget(slider)
         row.addWidget(val_label)
         self._props_form.addRow(label, row)
 
+    # ── single-element props (color + font + visibility, no position) ──
+
     def _build_element_props(self, eid: str):
         elems = self._data.setdefault("elements", {})
         elem = elems.setdefault(eid, {"type": "label", "geometry": {}})
-        geo = elem.setdefault("geometry", {})
 
         self._add_color_picker("文字颜色", elem, "color", "#ffffff")
         self._add_spin_int("字体大小", elem, "font_size", 8, 500)
 
-        self._props_form.addRow(" ", QLabel(""))
+    # ── both-teams props (name + score per team, no position) ──
 
-        self._add_spin_float("位置 X", geo, "x", 0, 1, 2, 0.01)
-        self._add_spin_float("位置 Y", geo, "y", 0, 1, 2, 0.01)
-        self._add_spin_float("宽度", geo, "w", 0, 1, 2, 0.01)
-        self._add_spin_float("高度", geo, "h", 0, 1, 2, 0.01)
+    def _build_both_teams_props(self):
+        elems = self._data.setdefault("elements", {})
+        team_pairs = [
+            ("A队", "team_a_name", "team_a_score"),
+            ("B队", "team_b_name", "team_b_score"),
+        ]
+
+        for team_label, name_id, score_id in team_pairs:
+            sep = QLabel(f"── {team_label} ──")
+            sep.setStyleSheet("color: #aaa; font-weight: bold; margin-top: 8px;")
+            self._props_form.addRow(sep)
+
+            name_elem = elems.setdefault(name_id, {"type": "label", "geometry": {}})
+            score_elem = elems.setdefault(score_id, {"type": "digits", "geometry": {}, "min_digits": 2})
+
+            name_lbl = QLabel("  队名")
+            name_lbl.setStyleSheet("color: #ccc; font-size: 11px;")
+            self._props_form.addRow(name_lbl)
+            self._add_color_picker("    颜色", name_elem, "color", "#ffffff")
+            self._add_spin_int("    字体大小", name_elem, "font_size", 8, 200)
+
+            score_lbl = QLabel("  比分")
+            score_lbl.setStyleSheet("color: #ccc; font-size: 11px;")
+            self._props_form.addRow(score_lbl)
+            self._add_color_picker("    颜色", score_elem, "color", "#ffffff")
+            self._add_spin_int("    字体大小", score_elem, "font_size", 8, 500)
+
+    # ── unified layout editor ──
+
+    def _build_layout_props(self):
+        """Unified layout editor: X/Y only, live preview on change."""
+        elems = self._data.setdefault("elements", {})
+
+        hint = QLabel("拖动或输入 X/Y 数值，计分板实时预览")
+        hint.setStyleSheet("color: #888; font-size: 11px; margin-bottom: 4px;")
+        self._props_form.addRow(hint)
+
+        # Column headers
+        header = QHBoxLayout()
+        header.setSpacing(6)
+        for text, w in [("元素", 80), ("X", 120), ("Y", 120), ("显示", 50)]:
+            lbl = QLabel(text)
+            lbl.setFixedWidth(w)
+            lbl.setStyleSheet("color: #aaa; font-size: 12px; font-weight: bold;")
+            header.addWidget(lbl)
+        header.addStretch()
+        self._props_form.addRow(header)
+
+        for eid in elems:
+            if eid == "placeholder_none":
+                continue
+
+            elem = elems[eid]
+            geo = elem.setdefault("geometry", {})
+
+            row = QHBoxLayout()
+            row.setSpacing(6)
+
+            name_label = QLabel(self.ELEMENT_LABELS.get(eid, eid))
+            name_label.setFixedWidth(80)
+            name_label.setStyleSheet("color: #ccc; font-size: 12px;")
+            row.addWidget(name_label)
+
+            for key in ("x", "y"):
+                sb = QDoubleSpinBox()
+                sb.setRange(0.0, 1.0)
+                sb.setDecimals(2)
+                sb.setSingleStep(0.01)
+                sb.setFixedWidth(120)
+                sb.setValue(geo.get(key, 0.0))
+                sb.setStyleSheet("font-size: 13px;")
+                sb.valueChanged.connect(
+                    lambda v, eid=eid, g=geo, k=key:
+                    self._on_position_changed(eid, g, k, round(v, 2))
+                )
+                row.addWidget(sb)
+
+            # Visibility checkbox
+            vis_cb = QCheckBox()
+            vis_cb.setChecked(elem.get("visible", True))
+            vis_cb.setFixedWidth(50)
+            vis_cb.setToolTip("显示/隐藏")
+            vis_cb.toggled.connect(
+                lambda checked, el=elem: self._set(el, "visible", checked)
+            )
+            row.addWidget(vis_cb)
+
+            row.addStretch()
+            self._props_form.addRow(row)
+
+    def _on_position_changed(self, eid: str, geo: dict, key: str, value: float):
+        """Update data AND push live update to scoreboard."""
+        self._set(geo, key, value)
+        if self._scoreboard_window:
+            self._scoreboard_window.update_element_position(eid, {key: value})
+
+    # ── visibility helper ──
+
+    def _add_visibility_checkbox(self, elem: dict):
+        cb = QCheckBox("显示在记分板上")
+        cb.setChecked(elem.get("visible", True))
+        cb.setStyleSheet("color: #ccc; font-size: 11px;")
+        cb.toggled.connect(lambda checked, e=elem: self._set(e, "visible", checked))
+        self._props_form.addRow(cb)
+
+    # ── generic widget builders ──
 
     def _add_spin_int(self, label: str, container: dict, key: str,
                       min_v: int, max_v: int):
@@ -241,6 +376,8 @@ class StyleEditor(QDialog):
     def _set(container: dict, key: str, value):
         container[key] = value
 
+    # ── save / export / reset ──
+
     def _on_save(self):
         try:
             self._save()
@@ -252,16 +389,24 @@ class StyleEditor(QDialog):
         except Exception as e:
             QMessageBox.warning(self, "保存失败", str(e))
 
-    def _on_export(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, "另存为模板", "", "JSON (*.json)")
-        if path:
+    def _on_set_default(self):
+        """Save current state as the new permanent default."""
+        reply = QMessageBox.question(
+            self, "设为默认",
+            "将当前样式保存为默认模板？\n下次打开样式编辑器将使用此默认值。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
             try:
-                with open(path, "w", encoding="utf-8") as f:
-                    json.dump(self._data, f, ensure_ascii=False, indent=2)
-                QMessageBox.information(self, "已导出", f"已保存到:\n{path}")
+                self._save()
+                # Update snapshot so reset goes to this new default
+                self._original_data = json.loads(json.dumps(self._data))
+                if self._scoreboard_window:
+                    opacity = self._data.get("background", {}).get("opacity", 1.0)
+                    self._scoreboard_window.set_opacity(opacity)
+                QMessageBox.information(self, "已设置",
+                                        "当前样式已保存为默认模板。")
             except Exception as e:
-                QMessageBox.warning(self, "导出失败", str(e))
+                QMessageBox.warning(self, "设置失败", str(e))
 
     def _on_reset(self):
         reply = QMessageBox.question(
@@ -269,7 +414,12 @@ class StyleEditor(QDialog):
             "重置为默认值？当前所有修改将丢失。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
-            self._load()
+            # Restore from the snapshot taken when editor opened
+            self._data = json.loads(json.dumps(self._original_data))
+            # Write back to file so scoreboard also reverts
+            self._save()
+            if self._scoreboard_window:
+                self._scoreboard_window.load_template(self.template_dir)
             current = self._list.currentItem()
             if current:
                 self._on_select(current, None)
