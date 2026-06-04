@@ -234,7 +234,7 @@ def _find_free_port(start: int = 5000, max_attempts: int = 20) -> int:
 class WebController:
     """Background HTTP server for mobile phone scoreboard control."""
 
-    def __init__(self, game_state, port: int = 5000):
+    def __init__(self, game_state, port: int = 8765):
         self._gs = game_state
         self._port = port
         self._server: HTTPServer | None = None
