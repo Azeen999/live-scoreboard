@@ -218,6 +218,19 @@ class MobileHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
 
+def _find_free_port(start: int = 5000, max_attempts: int = 20) -> int:
+    """Find a free TCP port starting from `start`, trying up to `max_attempts`."""
+    for offset in range(max_attempts):
+        port = start + offset
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("0.0.0.0", port))
+                return port
+        except OSError:
+            continue
+    raise OSError(f"No free port found in range {start}-{start + max_attempts - 1}")
+
+
 class WebController:
     """Background HTTP server for mobile phone scoreboard control."""
 
@@ -226,12 +239,17 @@ class WebController:
         self._port = port
         self._server: HTTPServer | None = None
         self._thread: threading.Thread | None = None
+        self._running = False
 
     @property
     def address(self) -> str:
         """Return the local network URL for the mobile page."""
         ip = self._get_local_ip()
         return f"http://{ip}:{self._port}"
+
+    @property
+    def is_running(self) -> bool:
+        return self._running
 
     @staticmethod
     def _get_local_ip() -> str:
@@ -246,14 +264,30 @@ class WebController:
             return "127.0.0.1"
 
     def start(self):
-        """Start the server in a background daemon thread."""
-        MobileHandler.game_state = self._gs
-        self._server = HTTPServer(("0.0.0.0", self._port), MobileHandler)
-        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
-        self._thread.start()
+        """Start the server in a background daemon thread.
+        Auto-detects a free port if the default is occupied."""
+        try:
+            self._port = _find_free_port(self._port)
+        except OSError as e:
+            print(f"[WebController] {e}")
+            self._running = False
+            return
+
+        try:
+            MobileHandler.game_state = self._gs
+            self._server = HTTPServer(("0.0.0.0", self._port), MobileHandler)
+            self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+            self._thread.start()
+            self._running = True
+            print(f"[WebController] 手机控制已启动: http://{self._get_local_ip()}:{self._port}")
+        except OSError as e:
+            print(f"[WebController] 启动失败: {e}")
+            self._running = False
+            self._server = None
 
     def stop(self):
         """Shut down the server."""
         if self._server:
             self._server.shutdown()
             self._server = None
+        self._running = False

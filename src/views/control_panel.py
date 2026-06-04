@@ -447,9 +447,12 @@ class ControlPanel(QMainWindow):
 
     def set_web_controller(self, controller):
         self._web_controller = controller
+        if controller and not controller.is_running:
+            self._btn_mobile.setEnabled(False)
+            self._btn_mobile.setToolTip("手机控制服务未能启动（端口被占用或网络异常）")
 
     def _on_mobile_control(self):
-        if not self._web_controller:
+        if not self._web_controller or not self._web_controller.is_running:
             return
         url = self._web_controller.address
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=260x260&data={url}"
