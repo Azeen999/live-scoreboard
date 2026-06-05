@@ -27,6 +27,8 @@ class BackgroundConfig:
     gradient_to: str = "#1a1a3a"
     opacity: float = 1.0  # 0.0=fully transparent, 1.0=fully opaque
     image: str = ""  # filename relative to template dir, e.g. "bg.png"
+    border_radius: int = 0  # corner radius in pixels
+    padding: int = 0  # shrink background box by N pixels on each side
 
 
 @dataclass
@@ -50,6 +52,8 @@ class TemplateConfig:
             gradient_to=bg_data.get("gradient_to", "#1a1a3a"),
             opacity=bg_data.get("opacity", 1.0),
             image=bg_data.get("image", ""),
+            border_radius=bg_data.get("border_radius", 0),
+            padding=bg_data.get("padding", 0),
         )
         res = data.get("resolution", {})
         elements = {}

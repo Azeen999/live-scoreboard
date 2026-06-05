@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QLabel,
 from PySide6.QtCore import Qt, QTimer, QFileSystemWatcher, Signal
 import os
 from PySide6.QtGui import (QPainter, QLinearGradient, QColor, QFont, QPixmap,
-                           QMouseEvent)
+                           QMouseEvent, QPainterPath)
 
 from src.models.game_state import GameState
 from src.templates.template_config import TemplateConfig, load_template, ElementConfig
@@ -48,6 +48,11 @@ class ScoreboardCanvas(QWidget):
         for elem_id, elem in self._template_config.elements.items():
             w = self._create_element(elem_id, elem)
             self._widgets[elem_id] = w
+        # Ensure timer (and period) render on top of score widgets
+        for top_id in ("timer", "period"):
+            top_w = self._widgets.get(top_id)
+            if top_w:
+                top_w.raise_()
         self._reposition_overlays()
 
     def _create_element(self, elem_id: str, elem: ElementConfig) -> QWidget:
@@ -89,9 +94,9 @@ class ScoreboardCanvas(QWidget):
     def _reposition_overlays(self):
         if not self._template_config:
             return
-        w = self.width()
-        h = self.height()
-        if w <= 0 or h <= 0:
+        cw = self.width()
+        ch = self.height()
+        if cw <= 0 or ch <= 0:
             return
         sf = self._scale_factor
         for elem_id, elem in self._template_config.elements.items():
@@ -99,20 +104,44 @@ class ScoreboardCanvas(QWidget):
             if not widget:
                 continue
             geo = elem.geometry
-            x = int(geo["x"] * w)
-            y = int(geo["y"] * h)
-            ew = int(geo["w"] * w)
-            eh = int(geo["h"] * h)
-            widget.setGeometry(x, y, ew, eh)
+            x = int(geo["x"] * cw)
+            y = int(geo["y"] * ch)
+            ew = int(geo["w"] * cw)
+            eh = int(geo["h"] * ch)
             if isinstance(widget, QLabel):
                 desired_px = max(10, int(elem.font_size * sf))
-                max_px = min(desired_px, int(eh * 0.9))
                 font = widget.font()
-                font.setPixelSize(max(8, max_px))
+                font.setPixelSize(max(8, desired_px))
                 widget.setFont(font)
+                # Auto-expand widget to fit actual text size
+                fm = widget.fontMetrics()
+                text_w = fm.horizontalAdvance(widget.text()) + 4
+                text_h = fm.height() + 4
+                if text_w > ew:
+                    x = x - (text_w - ew) // 2
+                    ew = text_w
+                if text_h > eh:
+                    y = y - (text_h - eh) // 2
+                    eh = text_h
+                # Clamp to canvas bounds
+                if x < 0:
+                    x = 0
+                if y < 0:
+                    y = 0
+                if x + ew > cw:
+                    ew = cw - x
+                if y + eh > ch:
+                    eh = ch - y
+            widget.setGeometry(x, y, ew, eh)
 
     def set_scale_factor(self, sf: float):
         self._scale_factor = sf
+
+    def _bg_rect(self):
+        """Returns the background rect adjusted for padding."""
+        r = self.rect()
+        p = self._template_config.background.padding if self._template_config else 0
+        return r.adjusted(p, p, -p, -p)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -120,28 +149,39 @@ class ScoreboardCanvas(QWidget):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         if self._template_config:
             bg = self._template_config.background
+            br = self._bg_rect()
+            radius = bg.border_radius
+            if radius > 0:
+                clip = QPainterPath()
+                clip.addRoundedRect(br, radius, radius)
+            else:
+                clip = QPainterPath()
+                clip.addRect(br)
+
             if self._cached_pixmap and not self._cached_pixmap.isNull():
                 painter.setOpacity(bg.opacity)
+                painter.setClipPath(clip)
                 scaled = self._cached_pixmap.scaled(
-                    self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    br.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                     Qt.TransformationMode.SmoothTransformation
                 )
-                x = (self.width() - scaled.width()) // 2
-                y = (self.height() - scaled.height()) // 2
+                x = br.x() + (br.width() - scaled.width()) // 2
+                y = br.y() + (br.height() - scaled.height()) // 2
                 painter.drawPixmap(x, y, scaled)
+                painter.setClipping(False)
                 painter.setOpacity(1.0)
             elif bg.gradient:
                 c1, c2 = QColor(bg.gradient_from), QColor(bg.gradient_to)
                 c1.setAlphaF(bg.opacity)
                 c2.setAlphaF(bg.opacity)
-                gradient = QLinearGradient(0, 0, 0, self.height())
+                gradient = QLinearGradient(br.topLeft(), br.bottomLeft())
                 gradient.setColorAt(0.0, c1)
                 gradient.setColorAt(1.0, c2)
-                painter.fillRect(self.rect(), gradient)
+                painter.fillPath(clip, gradient)
             else:
                 c = QColor(bg.color)
                 c.setAlphaF(bg.opacity)
-                painter.fillRect(self.rect(), c)
+                painter.fillPath(clip, c)
         else:
             painter.fillRect(self.rect(), QColor("#0a0a1a"))
         painter.end()
@@ -417,7 +457,19 @@ class ScoreboardWindow(QMainWindow):
         """Update background opacity without rebuilding overlay widgets."""
         if self._template_config:
             self._template_config.background.opacity = opacity
-        self._canvas.update()  # repaint only, no rebuild
+        self._canvas.update()
+
+    def set_border_radius(self, radius: int):
+        """Update background border radius without rebuilding."""
+        if self._template_config:
+            self._template_config.background.border_radius = radius
+        self._canvas.update()
+
+    def set_padding(self, padding: int):
+        """Update background padding without rebuilding."""
+        if self._template_config:
+            self._template_config.background.padding = padding
+        self._canvas.update()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:

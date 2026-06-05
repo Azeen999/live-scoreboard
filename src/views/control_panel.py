@@ -188,16 +188,14 @@ class ControlPanel(QMainWindow):
         self._btn_style = QPushButton("样式")
         self._btn_reset = QPushButton("全部重置")
         self._btn_show = QPushButton("隐藏记分板")
-        self._btn_top = QPushButton("悬浮置顶")
-        self._btn_center_top = QPushButton("居中显示")
+        self._btn_top_center = QPushButton("悬浮居中")
         self._btn_mobile = QPushButton("手机控制")
-        self._btn_top.setCheckable(True)
-        self._btn_top.setChecked(False)
+        self._btn_top_center.setCheckable(True)
+        self._btn_top_center.setChecked(False)
 
         all_btns = [
             (self._btn_swap, 0, 0), (self._btn_style, 0, 1), (self._btn_reset, 0, 2),
-            (self._btn_show, 1, 0), (self._btn_top, 1, 1), (self._btn_center_top, 1, 2),
-            (self._btn_mobile, 2, 0),
+            (self._btn_show, 1, 0), (self._btn_top_center, 1, 1), (self._btn_mobile, 1, 2),
         ]
         for btn, r, c in all_btns:
             btn.setFixedHeight(30)
@@ -224,8 +222,7 @@ class ControlPanel(QMainWindow):
         self._btn_style.clicked.connect(self._open_style_editor)
         self._btn_reset.clicked.connect(self._gs.reset_all)
         self._btn_show.clicked.connect(self._toggle_scoreboard)
-        self._btn_top.clicked.connect(self._toggle_stay_on_top)
-        self._btn_center_top.clicked.connect(self._on_center_top)
+        self._btn_top_center.clicked.connect(self._toggle_top_center)
         self._btn_mobile.clicked.connect(self._on_mobile_control)
 
         # ---- GameState signal connections ----
@@ -421,9 +418,11 @@ class ControlPanel(QMainWindow):
             w.show()
             self._btn_show.setText("隐藏记分板")
 
-    def _toggle_stay_on_top(self, checked: bool):
-        self._btn_top.setText("取消悬浮置顶" if checked else "悬浮置顶")
+    def _toggle_top_center(self, checked: bool):
+        self._btn_top_center.setText("取消悬浮居中" if checked else "悬浮居中")
         self._scoreboard_window.set_stay_on_top(checked)
+        if checked:
+            self._scoreboard_window.center_at_screen_top()
 
     def _open_style_editor(self):
         tid = self._template_combo.currentData()
@@ -440,10 +439,6 @@ class ControlPanel(QMainWindow):
         self._score_a_color, self._score_b_color = self._score_b_color, self._score_a_color
         self._score_a.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {self._score_a_color};")
         self._score_b.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {self._score_b_color};")
-
-    def _on_center_top(self):
-        if self._scoreboard_window:
-            self._scoreboard_window.center_at_screen_top()
 
     def set_web_controller(self, controller):
         self._web_controller = controller

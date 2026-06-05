@@ -11,7 +11,9 @@
     "gradient_from": "#0d0d2b",
     "gradient_to": "#1a1a3e",
     "opacity": 1.0,
-    "image": ""
+    "image": "",
+    "border_radius": 15,
+    "padding": 10
   },
   "global_style": {
     "font_family": "Microsoft YaHei"
@@ -20,24 +22,24 @@
     "team_a_name": {
       "type": "label",
       "geometry": {
-        "x": 0.1,
+        "x": 0.11,
         "y": 0.15,
         "w": 0.18,
         "h": 0.18
       },
-      "font_size": 50,
+      "font_size": 100,
       "color": "#ffffff",
       "alignment": "left"
     },
     "team_a_score": {
       "type": "digits",
       "geometry": {
-        "x": 0.04,
-        "y": 0.2,
+        "x": 0.08,
+        "y": 0.31,
         "w": 0.18,
         "h": 0.7
       },
-      "font_size": 160,
+      "font_size": 300,
       "color": "#921de6",
       "alignment": "center",
       "min_digits": 2,
@@ -47,11 +49,11 @@
       "type": "timer",
       "geometry": {
         "x": 0.39,
-        "y": 0.27,
+        "y": 0.32,
         "w": 0.24,
         "h": 0.55
       },
-      "font_size": 200,
+      "font_size": 300,
       "color": "#ffffff",
       "alignment": "center",
       "format": "mm:ss"
@@ -60,7 +62,7 @@
       "type": "label",
       "geometry": {
         "x": 0.4,
-        "y": 0.72,
+        "y": 0.73,
         "w": 0.24,
         "h": 0.16
       },
@@ -77,7 +79,7 @@
         "w": 0.18,
         "h": 0.12
       },
-      "font_size": 80,
+      "font_size": 130,
       "color": "#555555",
       "alignment": "center",
       "visible": true
@@ -85,12 +87,12 @@
     "team_b_score": {
       "type": "digits",
       "geometry": {
-        "x": 0.76,
-        "y": 0.2,
+        "x": 0.75,
+        "y": 0.31,
         "w": 0.18,
         "h": 0.7
       },
-      "font_size": 160,
+      "font_size": 300,
       "color": "#ff5252",
       "alignment": "center",
       "min_digits": 2
@@ -98,12 +100,12 @@
     "team_b_name": {
       "type": "label",
       "geometry": {
-        "x": 0.7,
+        "x": 0.72,
         "y": 0.15,
         "w": 0.18,
         "h": 0.18
       },
-      "font_size": 50,
+      "font_size": 100,
       "color": "#ffffff",
       "alignment": "right"
     }

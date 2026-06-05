@@ -165,6 +165,8 @@ class StyleEditor(QDialog):
 
         self._add_color_picker("背景颜色", bg, "color", "#0d0d1a")
         self._add_opacity_slider("透明度", bg, "opacity")
+        self._add_background_spin("圆角", bg, "border_radius", 0, 200)
+        self._add_background_spin("边距", bg, "padding", 0, 200)
 
         # Always show gradient color pickers
         self._add_color_picker("渐变起始色", bg, "gradient_from", "#0d0d1a")
@@ -197,6 +199,25 @@ class StyleEditor(QDialog):
         row.addWidget(val_label)
         self._props_form.addRow(label, row)
 
+    def _add_background_spin(self, label: str, container: dict, key: str,
+                              min_v: int, max_v: int):
+        """Spin box with live preview on the scoreboard window."""
+        w = QSpinBox()
+        w.setRange(min_v, max_v)
+        w.setValue(container.get(key, min_v))
+        w.setSuffix(" px")
+        w.valueChanged.connect(lambda v: self._set(container, key, v))
+        # Live preview
+        method_map = {
+            "border_radius": "set_border_radius",
+            "padding": "set_padding",
+        }
+        if self._scoreboard_window and key in method_map:
+            w.valueChanged.connect(
+                lambda v: getattr(self._scoreboard_window, method_map[key])(v)
+            )
+        self._props_form.addRow(label, w)
+
     # ── single-element props (color + font + visibility, no position) ──
 
     def _build_element_props(self, eid: str):
@@ -227,7 +248,7 @@ class StyleEditor(QDialog):
             name_lbl.setStyleSheet("color: #ccc; font-size: 11px;")
             self._props_form.addRow(name_lbl)
             self._add_color_picker("    颜色", name_elem, "color", "#ffffff")
-            self._add_spin_int("    字体大小", name_elem, "font_size", 8, 200)
+            self._add_spin_int("    字体大小", name_elem, "font_size", 8, 500)
 
             score_lbl = QLabel("  比分")
             score_lbl.setStyleSheet("color: #ccc; font-size: 11px;")
@@ -382,12 +403,19 @@ class StyleEditor(QDialog):
 
     # ── save / export / reset ──
 
+    def _sync_background(self):
+        """Push all background properties to the scoreboard window."""
+        if not self._scoreboard_window:
+            return
+        bg = self._data.get("background", {})
+        self._scoreboard_window.set_opacity(bg.get("opacity", 1.0))
+        self._scoreboard_window.set_border_radius(bg.get("border_radius", 0))
+        self._scoreboard_window.set_padding(bg.get("padding", 0))
+
     def _on_save(self):
         try:
             self._save()
-            if self._scoreboard_window:
-                opacity = self._data.get("background", {}).get("opacity", 1.0)
-                self._scoreboard_window.set_opacity(opacity)
+            self._sync_background()
             QMessageBox.information(self, "已保存",
                                     "template.json 已保存，计分板自动更新。")
         except Exception as e:
@@ -404,9 +432,7 @@ class StyleEditor(QDialog):
                 self._save()
                 # Update snapshot so reset goes to this new default
                 self._original_data = json.loads(json.dumps(self._data))
-                if self._scoreboard_window:
-                    opacity = self._data.get("background", {}).get("opacity", 1.0)
-                    self._scoreboard_window.set_opacity(opacity)
+                self._sync_background()
                 QMessageBox.information(self, "已设置",
                                         "当前样式已保存为默认模板。")
             except Exception as e:
