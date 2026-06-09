@@ -1,23 +1,34 @@
 import json
 import os
+import shutil
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QWidget,
     QLabel, QPushButton, QListWidget, QListWidgetItem, QScrollArea,
     QSpinBox, QDoubleSpinBox, QLineEdit, QCheckBox,
     QColorDialog, QMessageBox, QFileDialog, QFrame, QSlider,
+    QInputDialog,
 )
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtGui import QColor
+
+from src.utils.resource_path import get_resource_path
 
 
 class StyleEditor(QDialog):
+    template_saved = Signal(str)  # 新模板目录名
+
     ELEMENT_LABELS = {
         "__background__": "背景",
         "__both_teams__": "两队设置",
         "__layout__": "位置",
-        "timer": "计时器", "period": "节次",
-        "vs_divider": "VS",
+        "team_a_name": "A队队名",
+        "team_a_score": "A队比分",
+        "team_b_name": "B队队名",
+        "team_b_score": "B队比分",
+        "timer": "计时器",
+        "period": "节次",
+        "vs_divider": "VS分隔",
     }
 
     # Elements to skip in the list (covered by 两队设置)
@@ -87,10 +98,11 @@ class StyleEditor(QDialog):
         self._btn_close.clicked.connect(self.reject)
         btns.addWidget(self._btn_close)
         btns.addStretch()
-        self._btn_set_default = QPushButton("设为默认")
-        self._btn_set_default.setAutoDefault(False)
-        self._btn_set_default.clicked.connect(self._on_set_default)
-        btns.addWidget(self._btn_set_default)
+        self._btn_save_preset = QPushButton("保存预设")
+        self._btn_save_preset.setAutoDefault(False)
+        self._btn_save_preset.setToolTip("将当前样式另存为一个新模板")
+        self._btn_save_preset.clicked.connect(self._on_save_preset)
+        btns.addWidget(self._btn_save_preset)
         self._btn_save = QPushButton("保存")
         self._btn_save.setAutoDefault(False)
         self._btn_save.setMinimumHeight(34)
@@ -262,7 +274,7 @@ class StyleEditor(QDialog):
         """Unified layout editor: X/Y only, live preview on change."""
         elems = self._data.setdefault("elements", {})
 
-        hint = QLabel("拖动或输入 X/Y 数值，计分板实时预览")
+        hint = QLabel("拖动或输入 X/Y 数值（0~1），计分板实时预览")
         hint.setStyleSheet("color: #888; font-size: 11px; margin-bottom: 4px;")
         self._props_form.addRow(hint)
 
@@ -421,22 +433,56 @@ class StyleEditor(QDialog):
         except Exception as e:
             QMessageBox.warning(self, "保存失败", str(e))
 
-    def _on_set_default(self):
-        """Save current state as the new permanent default."""
-        reply = QMessageBox.question(
-            self, "设为默认",
-            "将当前样式保存为默认模板？\n下次打开样式编辑器将使用此默认值。",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                self._save()
-                # Update snapshot so reset goes to this new default
-                self._original_data = json.loads(json.dumps(self._data))
-                self._sync_background()
-                QMessageBox.information(self, "已设置",
-                                        "当前样式已保存为默认模板。")
-            except Exception as e:
-                QMessageBox.warning(self, "设置失败", str(e))
+    def _on_save_preset(self):
+        """Save current style as a new named template under templates/."""
+        name, ok = QInputDialog.getText(
+            self, "保存预设", "预设名称:",
+            text="",
+        )
+        if not ok or not name or not name.strip():
+            return
+        name = name.strip()
+
+        # Sanitize filename
+        safe_name = "".join(
+            c for c in name
+            if c.isalnum() or c in "._- ()（）"
+        ).strip()
+        if not safe_name:
+            safe_name = "未命名"
+
+        target_dir = get_resource_path(os.path.join("templates", safe_name))
+        target_json = os.path.join(target_dir, "template.json")
+
+        # Check if already exists
+        if os.path.exists(target_dir):
+            reply = QMessageBox.question(
+                self, "覆盖确认",
+                f"模板「{safe_name}」已存在，是否覆盖？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+
+            # Save template.json
+            with open(target_json, "w", encoding="utf-8") as f:
+                json.dump(self._data, f, ensure_ascii=False, indent=2)
+
+            # Copy background image if present
+            bg = self._data.get("background", {})
+            bg_image = bg.get("image", "")
+            if bg_image:
+                src_img = os.path.join(self.template_dir, bg_image)
+                if os.path.isfile(src_img):
+                    shutil.copy2(src_img, os.path.join(target_dir, bg_image))
+
+            self.template_saved.emit(safe_name)
+            QMessageBox.information(self, "已保存",
+                                    f"预设「{safe_name}」已保存，可在控制面板模板中选择。")
+        except Exception as e:
+            QMessageBox.warning(self, "保存失败", str(e))
 
     def _on_reset(self):
         reply = QMessageBox.question(

@@ -1,11 +1,12 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QLabel, QComboBox,
                                QVBoxLayout, QHBoxLayout, QPushButton,
                                QLineEdit, QGroupBox, QSpinBox, QStatusBar,
-                               QGridLayout, QDialog)
+                               QGridLayout, QDialog, QMessageBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 import os
+import shutil
 
 from src.models.game_state import GameState
 from src.config.sports import SPORTS
@@ -44,6 +45,11 @@ class ControlPanel(QMainWindow):
         self._template_combo.setMinimumHeight(24)
         self._scan_templates()
         top.addWidget(self._template_combo)
+        self._btn_delete_template = QPushButton(" 删除 ")
+        self._btn_delete_template.setFixedHeight(26)
+        self._btn_delete_template.setToolTip("删除当前选中的模板")
+        self._btn_delete_template.clicked.connect(self._on_delete_template)
+        top.addWidget(self._btn_delete_template)
         top.addStretch()
         main_layout.addLayout(top)
 
@@ -107,9 +113,8 @@ class ControlPanel(QMainWindow):
         self._time_sec.setFixedHeight(24)
         time_row.addWidget(self._time_min)
         time_row.addWidget(self._time_sec)
-        self._btn_set_time = QPushButton("设定")
-        self._btn_set_time.setFixedHeight(24)
-        self._btn_set_time.setFixedWidth(40)
+        self._btn_set_time = QPushButton(" 设定 ")
+        self._btn_set_time.setFixedHeight(26)
         time_row.addWidget(self._btn_set_time)
         lt.addLayout(time_row)
 
@@ -246,12 +251,15 @@ class ControlPanel(QMainWindow):
         self._on_reset()
 
     def _scan_templates(self):
+        self._template_combo.blockSignals(True)
+        self._template_combo.clear()
         for name in list_resource_dirs("templates"):
             p = get_resource_path(os.path.join("templates", name))
             if os.path.isdir(p) and os.path.exists(os.path.join(p, "template.json")):
                 self._template_combo.addItem(name, name)
         if self._template_combo.count() == 0:
             self._template_combo.addItem("默认", "default")
+        self._template_combo.blockSignals(False)
 
     def _sync_template_combo(self):
         self._template_combo.blockSignals(True)
@@ -260,6 +268,40 @@ class ControlPanel(QMainWindow):
                 self._template_combo.setCurrentIndex(i)
                 break
         self._template_combo.blockSignals(False)
+
+    def refresh_templates(self):
+        """Refresh template combo after new template is saved/deleted."""
+        self._scan_templates()
+        self._sync_template_combo()
+
+    def _on_delete_template(self):
+        """Delete the currently selected template."""
+        tid = self._template_combo.currentData()
+        if not tid:
+            return
+        # Protect built-in templates
+        if tid in ("default", "minimal"):
+            QMessageBox.warning(self, "无法删除", "内置模板不能删除。")
+            return
+
+        reply = QMessageBox.question(
+            self, "确认删除",
+            f"确定要删除模板「{tid}」吗？\n此操作不可撤销。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        template_dir = get_resource_path(os.path.join("templates", tid))
+        try:
+            if os.path.isdir(template_dir):
+                shutil.rmtree(template_dir)
+            # If the deleted template was active, switch to default
+            if self._gs.template_id == tid:
+                self._gs.set_template("default")
+            self.refresh_templates()
+            self._status.showMessage(f"模板「{tid}」已删除", 3000)
+        except Exception as e:
+            QMessageBox.warning(self, "删除失败", str(e))
 
     def _on_sport_changed(self, idx: int):
         sid = self._sport_combo.currentData()
@@ -432,6 +474,7 @@ class ControlPanel(QMainWindow):
         if not os.path.isdir(template_dir):
             return
         editor = StyleEditor(template_dir, self._scoreboard_window, self)
+        editor.template_saved.connect(self.refresh_templates)
         editor.exec()
 
     def _on_swap_colors(self):

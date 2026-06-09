@@ -10,7 +10,7 @@
     "gradient": true,
     "gradient_from": "#6bea17",
     "gradient_to": "#ffffff",
-    "opacity": 0.87,
+    "opacity": 0.79,
     "image": "",
     "border_radius": 15,
     "padding": 10
@@ -68,7 +68,7 @@
         "h": 0.16
       },
       "font_size": 80,
-      "color": "#3d3d3d",
+      "color": "#242424",
       "alignment": "center",
       "visible": true
     },
